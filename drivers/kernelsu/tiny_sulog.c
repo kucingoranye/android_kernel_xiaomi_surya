@@ -1,3 +1,14 @@
+#include <linux/types.h>
+#include <linux/slab.h>
+#include <linux/spinlock.h>
+#include <linux/ktime.h>
+#include <linux/cred.h>
+#include <linux/string.h>
+#include <linux/uaccess.h>
+#include <linux/kernel.h>
+
+#include "tiny_sulog.h"
+
 // half assed ringbuffer
 // 8 bytes
 struct sulog_entry {
@@ -13,7 +24,7 @@ static uint8_t sulog_index_next = 0;
 
 static DEFINE_SPINLOCK(sulog_lock);
 
-void sulog_init_heap()
+void sulog_init_heap(void)
 {
 	sulog_buf_ptr = kzalloc(SULOG_BUFSIZ, GFP_KERNEL);
 	if (!sulog_buf_ptr)
@@ -55,12 +66,10 @@ void write_sulog(uint8_t sym)
 
 	unsigned int offset = sulog_index_next * sizeof(struct sulog_entry);
 	struct sulog_entry entry = {0};
-	
-	kuid_t current_uid = current_uid();
 
 	// WARNING!!! this is LE only!
 	entry.s_time = boottime_s_get();
-	entry.data = (uint32_t)ksu_get_uid_t(current_uid);
+	entry.data = (uint32_t)current_uid().val;
 	*((char *)&entry.data + 3) = sym;
 
 	// we can perform this write atomic on 64-bit
@@ -69,7 +78,7 @@ void write_sulog(uint8_t sym)
 	spin_lock(&sulog_lock);
 
 #ifdef CONFIG_64BIT
-	*(volatile uint64_t *)(sulog_buf_ptr + offset) = *(uint64_t *)&entry;
+	*(volatile uint64_t *)(sulog_buf_ptr + offset) = *(volatile uint64_t *)&entry;
 #else
 	__builtin_memcpy(sulog_buf_ptr + offset, &entry, sizeof(entry));
 #endif
@@ -105,16 +114,16 @@ int send_sulog_dump(void __user *uptr)
 
 	uint32_t uptime =  boottime_s_get();
 
-	if (copy_to_user((void __user *)(uintptr_t)sbuf.uptime_ptr, &uptime, sizeof(uptime) ))
+	if (copy_to_user((void __user *)sbuf.uptime_ptr, &uptime, sizeof(uptime) ))
 		return 1;
 
 	// send index
-	if (copy_to_user((void __user *)(uintptr_t)sbuf.index_ptr, &sulog_index_next, sizeof(sulog_index_next) ))
+	if (copy_to_user((void __user *)sbuf.index_ptr, &sulog_index_next, sizeof(sulog_index_next) ))
 		return 1;
 
 	// send buffer data
 	spin_lock(&sulog_lock);
-	if (copy_to_user((void __user *)(uintptr_t)sbuf.buf_ptr, sulog_buf_ptr, SULOG_BUFSIZ )) {
+	if (copy_to_user((void __user *)sbuf.buf_ptr, sulog_buf_ptr, SULOG_BUFSIZ )) {
 		spin_unlock(&sulog_lock);
 		return 1;
 	}
