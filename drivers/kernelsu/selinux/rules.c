@@ -224,7 +224,7 @@ out_unlock:
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 2, 0)
 	cpumask_copy(&old_mask, current->cpus_ptr);
 #else
-	cpumask_copy(&old_mask, &current->cpus_allowed);
+	cpumask_copy(&old_mask, current->cpus_ptr);
 #endif
 	set_cpus_allowed_ptr(current, cpumask_of(raw_smp_processor_id()));
 	write_lock(lock);
@@ -748,7 +748,7 @@ int handle_sepolicy(void __user *user_data, u64 data_len)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 2, 0)
 	cpumask_copy(&old_mask, current->cpus_ptr);
 #else
-	cpumask_copy(&old_mask, &current->cpus_allowed);
+	cpumask_copy(&old_mask, current->cpus_ptr);
 #endif
 	set_cpus_allowed_ptr(current, cpumask_of(raw_smp_processor_id()));
 	write_lock(lock);
